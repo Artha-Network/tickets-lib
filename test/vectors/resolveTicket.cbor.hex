@@ -1,0 +1,18 @@
+# ResolveTicket canonical CBOR hex vector
+# Schema: escrow.v1.ResolveTicket
+# Source: resolveTicket.sample.json
+# Purpose: Golden bytes for deterministic signing and cross-impl verification.
+#
+# How to regenerate (Node 18+):
+#   node -e "import fs from 'fs'; import { encode } from 'cborg';
+#            const v = JSON.parse(fs.readFileSync('test/vectors/resolveTicket.sample.json','utf8'));
+#            const bytes = encode(v, { canonical: true });
+#            console.log(Buffer.from(bytes).toString('hex'));"
+#
+# Notes:
+# - Keys must be encoded in canonical (lexicographic) order by UTF-8 bytes.
+# - Integers use the shortest width; floats use the shortest IEEE754 that round-trips.
+# - If this file changes, bump vectors and document the reason in CHANGELOG.
+#
+# Hex (lowercase, no 0x prefix):
+# PLACEHOLDER — regenerate with the command above and replace this line with the real hex.
