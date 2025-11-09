@@ -1,0 +1,10 @@
+{
+  "schema": "escrow.v1.ResolveTicket",
+  "deal_id": "D-1001",
+  "action": "SPLIT",
+  "split_bps": 7000,
+  "rationale_cid": "bafybeigdyrqexamplecidrationalehash",
+  "confidence": 0.9,
+  "nonce": 42,
+  "expires_at": 2000000000
+}
