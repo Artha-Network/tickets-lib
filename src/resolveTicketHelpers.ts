@@ -97,4 +97,122 @@ export function isTicketExpired(
 }
 
 /**
- * Signed ticket bundle (what most callers actu*
+ * Signed ticket bundle (what most callers actually need).
+ */
+export interface SignedTicket {
+  ticket: ResolveTicket;
+  bytes: Uint8Array;
+  signature: Uint8Array;
+}
+
+/**
+ * One-shot helper:
+ *   ResolveTicket -> canonical CBOR bytes -> ed25519 signature.
+ *
+ * `secretKey` type is left generic (string/Uint8Array) so you can
+ * keep your existing sign() implementation unchanged.
+ */
+export function encodeAndSignTicket(
+  ticket: ResolveTicket,
+  secretKey: Uint8Array | string
+): SignedTicket {
+  const bytes = encodeCbor(ticket);
+  const signature = sign(bytes, secretKey);
+  return { ticket, bytes, signature };
+}
+
+/**
+ * Options for decode + verify helper.
+ */
+export interface DecodeVerifyOptions {
+  /** Optional: enforce that ticket.deal_id matches this value. */
+  expectedDealId?: string;
+
+  /** Optional: enforce a specific action. */
+  expectedAction?: ResolveTicket["action"];
+
+  /**
+   * "Now" in unix seconds for expiry check. Default: current time.
+   */
+  nowSeconds?: number;
+
+  /**
+   * Allow tickets that expired <= maxSkewSeconds ago.
+   * Useful to tolerate small clock drift.
+   */
+  maxSkewSeconds?: number;
+}
+
+/**
+ * Result of decode + verify helper.
+ */
+export interface DecodeVerifyResult {
+  ok: boolean;
+  ticket?: ResolveTicket;
+  reason?: string;
+}
+
+/**
+ * One-shot helper:
+ *
+ *   bytes + signature + pubkey
+ *     -> verify ed25519
+ *     -> decode CBOR
+ *     -> validate with zod schema
+ *     -> optional expiry / deal_id / action checks
+ */
+export function decodeAndVerifyTicket(
+  bytes: Uint8Array,
+  signature: Uint8Array | string,
+  pubkey: Uint8Array | string,
+  opts: DecodeVerifyOptions = {}
+): DecodeVerifyResult {
+  const nowSeconds =
+    opts.nowSeconds ?? Math.floor(Date.now() / 1000);
+  const maxSkew = opts.maxSkewSeconds ?? 0;
+
+  // 1) Crypto: signature
+  const sigOk = verify(bytes, signature, pubkey);
+  if (!sigOk) {
+    return { ok: false, reason: "invalid_signature" };
+  }
+
+  // 2) Decode CBOR
+  let raw: unknown;
+  try {
+    raw = decodeCbor(bytes);
+  } catch (err) {
+    return { ok: false, reason: "invalid_cbor" };
+  }
+
+  // 3) Validate against schema
+  let ticket: ResolveTicket;
+  try {
+    ticket = schema.parse(raw);
+  } catch (err) {
+    return { ok: false, reason: "schema_validation_failed" };
+  }
+
+  // 4) Optional semantic checks
+  if (
+    opts.expectedDealId &&
+    ticket.deal_id !== opts.expectedDealId
+  ) {
+    return { ok: false, reason: "mismatched_deal_id" };
+  }
+
+  if (
+    opts.expectedAction &&
+    ticket.action !== opts.expectedAction
+  ) {
+    return { ok: false, reason: "mismatched_action" };
+  }
+
+  const expired =
+    ticket.expires_at + maxSkew < nowSeconds;
+  if (expired) {
+    return { ok: false, reason: "ticket_expired" };
+  }
+
+  return { ok: true, ticket };
+}
